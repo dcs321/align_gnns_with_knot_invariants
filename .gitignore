@@ -205,3 +205,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+.env
+run.sh
+wandb
+*.png
+*.pth
+logs/
+data/knot_data.csv
+data/knot_data2.csv
