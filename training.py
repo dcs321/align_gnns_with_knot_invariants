@@ -1,6 +1,7 @@
 
 import torch
 import wandb
+import copy
 
 def training_loop(model, train_loader, val_loader, optimizer, criterion, device, model_save_path, number_of_epochs, early_stopping_patience, wandb_enabled=False):
     best_val_loss = float('inf')
@@ -41,7 +42,7 @@ def training_loop(model, train_loader, val_loader, optimizer, criterion, device,
         if average_val_loss < best_val_loss:
             best_val_loss = average_val_loss
             steps_without_improvement = 0
-            best_model = model.state_dict()
+            best_model = copy.deepcopy(model.state_dict())
         else:
             steps_without_improvement += 1
             print(f"No improvement in validation loss for {steps_without_improvement} epochs.")

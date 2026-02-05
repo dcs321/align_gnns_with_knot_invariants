@@ -1,5 +1,6 @@
 import torch
 import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
 import wandb
 
 def create_test_predictions_and_targets(model, test_loader, device):
@@ -26,6 +27,9 @@ def compute_test_accuracy_from_mape(test_predictions, test_targets):
     accuracy = 1 - mape
     return accuracy
 
+def compute_test_r2_score(test_predictions, test_targets):
+    r2 = r2_score(test_targets, test_predictions)
+    return r2
 
 def  plot_predictions_vs_targets(test_predictions, test_targets,figure_save_path, wandb_enabled=False):
     min_value = min(test_targets.min(), test_predictions.min()).item()

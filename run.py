@@ -8,11 +8,11 @@ from torch.optim import Adam
 from torch.nn import MSELoss
 import wandb
 
-from data_parsers import parse_volume, parse_pd_notation, parse_list_of_features
+from data_parsers import parse_crossing_number, parse_volume, parse_pd_notation, parse_list_of_features
 from datasets import create_hypergraph_dataset_from_pd
 from models import HyperGNN
 from training import training_loop
-from evaluation import create_test_predictions_and_targets, compute_test_loss, compute_test_accuracy_from_mape, plot_predictions_vs_targets
+from evaluation import create_test_predictions_and_targets, compute_test_loss, compute_test_accuracy_from_mape, plot_predictions_vs_targets, compute_test_r2_score
 
 def main():
     parser = argparse.ArgumentParser()
@@ -27,8 +27,8 @@ def main():
     parser.add_argument('--validation_split_ratio', type=float, default=0.1, required=False, help='Validation split ratio')
     parser.add_argument('--batch_size', type=int, default=64, required=False, help='Batch size')
     parser.add_argument('--learning_rate', type=float, default=0.001, required=False, help='Learning rate')
-    parser.add_argument('--number_of_epochs', type=int, default=200, required=False, help='Number of epochs')
-    parser.add_argument('--early_stopping_patience', type=int, default=15, required=False, help='Early stopping patience')
+    parser.add_argument('--number_of_epochs', type=int, default=250, required=False, help='Number of epochs')
+    parser.add_argument('--early_stopping_patience', type=int, default=10, required=False, help='Early stopping patience')
     parser.add_argument('--model_save_path', type=str,default="models/model.pth", required=False, help='Model save path')
     parser.add_argument('--figure_save_path', type=str, default="figures/plot.png", required=False, help='Figure save path')
     parser.add_argument('--hidden_dims', type=int, default=64, required=False, help='Hidden dimensions')
@@ -37,12 +37,18 @@ def main():
     parser.add_argument('--optimizer', type=str, default='adam', required=False, help='Optimizer')
     parser.add_argument('--random_seed', type=int, default=42, required=False, help='Random seed')
     parser.add_argument('--wandb', action='store_true', help='Use wandb for logging')
-
+    parser.add_argument('--run_name', type=str, default='experiment', required=False, help='Wandb run name')
+    parser.add_argument('--use_attention_in_hypergraph', default=False, action='store_true', help='Use attention in HyperGNN')
+    parser.add_argument('--number_of_attention_heads_in_hypergraph', type=int, default=1, required=False, help='Number of attention heads in HyperGNN')
+    parser.add_argument('--type_of_attention_in_hypergraph', type=str, default="node", required=False, help='Type of attention in HyperGNN')
+    parser.add_argument('--embedding_used', default=False, action='store_true', required=False, help='Use embedding for node and edge features.')
+    parser.add_argument('--regression_or_classification', type=str, default="regression", required=False, help='Regression or classification task')
+    parser.add_argument('--uniform_edge_features', action='store_true', required=False, help='Use uniform edge features.')
 
     args = parser.parse_args()
 
     if args.wandb:
-        wandb.init(config=vars(args))
+        wandb.init(name=args.run_name, config=vars(args))
  
     torch.manual_seed(args.random_seed)
     np.random.seed(args.random_seed)
@@ -51,9 +57,17 @@ def main():
 
     if args.target_invariant == "volume":
         y = parse_list_of_features(list(df["Volume"]), parse_volume)
+    elif args.target_invariant == "crossing_number":
+        y = parse_list_of_features(list(df["Crossing Number"]), parse_crossing_number)
     else:
         raise NotImplementedError(f"Not implemented target invariant: {args.target_invariant}")
-    output_dims = len(y[0])
+    
+    if args.regression_or_classification == "classification":
+        raise NotImplementedError("Classification task is not implemented yet")
+    elif args.regression_or_classification == "regression":
+        output_dims = len(y[0])
+    else:
+        raise ValueError(f"Either regression or classification expected, got: {args.regression_or_classification}")
 
     if args.notation == "pd":
         notations = parse_list_of_features(list(df["PD Notation"]), parse_pd_notation)
@@ -61,7 +75,7 @@ def main():
         raise NotImplementedError(f"Not implemented notation: {args.notation}")
     
     if args.data_type == "hyper_graph":
-        dataset = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type)
+        dataset, max_num_of_nodes = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type, embedding_used=args.embedding_used, use_uniform_edge_features=args.uniform_edge_features)
         input_dims = dataset[0].x.shape[1]
     
     random.shuffle(dataset)
@@ -81,9 +95,17 @@ def main():
         raise NotImplementedError(f"Not implemented data loader: {args.data_loader}")
     
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    model = HyperGNN(input_dims=input_dims, hidden_dims=args.hidden_dims, output_dims=output_dims).to(device)
-    optimizer = Adam(model.parameters(), lr=args.learning_rate)
-    criterion = MSELoss()
+    model = HyperGNN(input_dims=input_dims, hidden_dims=args.hidden_dims, output_dims=output_dims, use_attention=args.use_attention_in_hypergraph, number_of_attention_heads=args.number_of_attention_heads_in_hypergraph, type_of_attention=args.type_of_attention_in_hypergraph, embedding_used=args.embedding_used, max_num_of_nodes=max_num_of_nodes).to(device)
+    
+    if args.optimizer == "adam":
+        optimizer = Adam(model.parameters(), lr=args.learning_rate)
+    else:
+        raise NotImplementedError(f"Not implemented optimizer: {args.optimizer}")
+
+    if args.criterion == 'mse':
+        criterion = MSELoss()
+    else:
+        raise NotImplementedError(f"Not implemented criterion: {args.criterion}")
 
     training_loop(
         model=model,
@@ -106,11 +128,12 @@ def main():
     test_predictions, test_targets = create_test_predictions_and_targets(model, test_loader, device)
     test_loss = compute_test_loss(test_predictions, test_targets, criterion)
     test_accuracy = compute_test_accuracy_from_mape(test_predictions, test_targets)
-    print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f}")
+    test_r2_score = compute_test_r2_score(test_predictions, test_targets)
+    print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f} | Test R2 Score: {test_r2_score:.5f}")
     plot_predictions_vs_targets(test_predictions, test_targets, args.figure_save_path, wandb_enabled=args.wandb)
 
     if args.wandb:
-        wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy})
+        wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy, "Test R2 Score": test_r2_score})
 
 if __name__ == "__main__":
     main()
