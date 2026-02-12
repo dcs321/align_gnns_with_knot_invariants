@@ -6,10 +6,11 @@ from torch_geometric.nn import HypergraphConv, global_mean_pool, global_max_pool
 
 
 class HyperGNN(torch.nn.Module):
-    def __init__(self, input_dims, hidden_dims, output_dims, use_attention = False, number_of_attention_heads=1, type_of_attention="node", embedding_used=False, max_num_of_nodes=None):
+    def __init__(self, input_dims, hidden_dims, output_dims, use_attention = False, number_of_attention_heads=1, type_of_attention="node", embedding_used=False, max_num_of_nodes=None, number_of_layers=2):
         super().__init__()
         self.use_attention = use_attention
         self.embedding_used = embedding_used
+        self.number_of_layers = number_of_layers
 
         if self.embedding_used:
             self.edge_embedding = Embedding(2, hidden_dims)
@@ -24,9 +25,18 @@ class HyperGNN(torch.nn.Module):
             first_hidden_dims = hidden_dims // number_of_attention_heads
         else:
             first_hidden_dims = hidden_dims
-
-        self.graph_conv1 = HypergraphConv(input_dims, first_hidden_dims, use_attention=use_attention, heads=number_of_attention_heads, attention_mode=type_of_attention)
-        self.graph_conv2 = HypergraphConv(hidden_dims, hidden_dims)
+        
+        if number_of_layers == 1:
+            self.graph_conv1 = HypergraphConv(input_dims, first_hidden_dims, use_attention=use_attention, heads=number_of_attention_heads, attention_mode=type_of_attention)
+        if number_of_layers >= 2:
+            self.graph_conv2 = HypergraphConv(hidden_dims, hidden_dims)
+        if number_of_layers >= 3:
+            self.graph_conv3 = HypergraphConv(hidden_dims, hidden_dims)
+        if number_of_layers == 4:
+            self.graph_conv4 = HypergraphConv(hidden_dims, hidden_dims)
+        if number_of_layers > 4:
+            raise NotImplementedError(f"Not implemented number of layers: {number_of_layers}")
+            
 
         self.relu = ReLU()
         self.linear = Linear(3*hidden_dims, output_dims)
@@ -44,11 +54,20 @@ class HyperGNN(torch.nn.Module):
             x = self.graph_conv1(node_features, hyperedge_indices)
 
         x = self.relu(x)
-        
-        x_2 = self.graph_conv2(x, hyperedge_indices)
-        
-        x = x + x_2
-        x = self.relu(x)
+
+        if self.number_of_layers >= 2:
+            x_2 = self.graph_conv2(x, hyperedge_indices)
+            
+            x = x + x_2 
+            x = self.relu(x)
+        if self.number_of_layers >= 3:
+            x_3 = self.graph_conv3(x, hyperedge_indices)
+            x = x + x_3
+            x = self.relu(x)
+        if self.number_of_layers == 4:
+            x_4 = self.graph_conv4(x, hyperedge_indices)
+            x = x + x_4
+            x = self.relu(x)
 
         x_mean = global_mean_pool(x, batch)
         x_max = global_max_pool(x, batch)

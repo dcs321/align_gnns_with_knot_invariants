@@ -2,7 +2,7 @@ def parse_volume(volume_str):
     return [[float(volume_str)]]
 
 def parse_crossing_number(crossing_number_str):
-    return [[int(crossing_number_str)]]
+    return [int(crossing_number_str)]
 
 def parse_pd_notation(pd_str):
     pd_str = pd_str.replace(' ', '')

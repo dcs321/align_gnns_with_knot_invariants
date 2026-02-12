@@ -4,15 +4,16 @@ import numpy as np
 import torch
 import random
 from torch_geometric.loader import DataLoader
-from torch.optim import Adam
-from torch.nn import MSELoss
+from torch.optim import Adam, AdamW
+from torch.nn import MSELoss, CrossEntropyLoss
 import wandb
 
 from data_parsers import parse_crossing_number, parse_volume, parse_pd_notation, parse_list_of_features
 from datasets import create_hypergraph_dataset_from_pd
 from models import HyperGNN
 from training import training_loop
-from evaluation import create_test_predictions_and_targets, compute_test_loss, compute_test_accuracy_from_mape, plot_predictions_vs_targets, compute_test_r2_score
+from evaluation import create_test_predictions_and_targets, compute_test_loss, compute_test_accuracy_from_mape, plot_predictions_vs_targets, compute_test_r2_score, compute_test_accuracy_for_classification, plot_confusion_matrix
+from sklearn.metrics import f1_score
 
 def main():
     parser = argparse.ArgumentParser()
@@ -44,6 +45,7 @@ def main():
     parser.add_argument('--embedding_used', default=False, action='store_true', required=False, help='Use embedding for node and edge features.')
     parser.add_argument('--regression_or_classification', type=str, default="regression", required=False, help='Regression or classification task')
     parser.add_argument('--uniform_edge_features', action='store_true', required=False, help='Use uniform edge features.')
+    parser.add_argument('--num_of_layers_in_hypergraph', type=int, default=2, required=False, help='Number of layers in HyperGNN')
 
     args = parser.parse_args()
 
@@ -63,7 +65,10 @@ def main():
         raise NotImplementedError(f"Not implemented target invariant: {args.target_invariant}")
     
     if args.regression_or_classification == "classification":
-        raise NotImplementedError("Classification task is not implemented yet")
+        label_set_list = sorted(list(set([label[0] for label in y])))
+        label_to_index = {label: idx for idx, label in enumerate(label_set_list)}
+        y = [[label_to_index[label[0]]] for label in y]
+        output_dims = len(label_set_list)
     elif args.regression_or_classification == "regression":
         output_dims = len(y[0])
     else:
@@ -75,7 +80,7 @@ def main():
         raise NotImplementedError(f"Not implemented notation: {args.notation}")
     
     if args.data_type == "hyper_graph":
-        dataset, max_num_of_nodes = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type, embedding_used=args.embedding_used, use_uniform_edge_features=args.uniform_edge_features)
+        dataset, max_num_of_nodes = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type, embedding_used=args.embedding_used, use_uniform_edge_features=args.uniform_edge_features, classification_or_regression=args.regression_or_classification)
         input_dims = dataset[0].x.shape[1]
     
     random.shuffle(dataset)
@@ -95,15 +100,24 @@ def main():
         raise NotImplementedError(f"Not implemented data loader: {args.data_loader}")
     
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    model = HyperGNN(input_dims=input_dims, hidden_dims=args.hidden_dims, output_dims=output_dims, use_attention=args.use_attention_in_hypergraph, number_of_attention_heads=args.number_of_attention_heads_in_hypergraph, type_of_attention=args.type_of_attention_in_hypergraph, embedding_used=args.embedding_used, max_num_of_nodes=max_num_of_nodes).to(device)
+    model = HyperGNN(input_dims=input_dims, hidden_dims=args.hidden_dims, output_dims=output_dims, use_attention=args.use_attention_in_hypergraph, number_of_attention_heads=args.number_of_attention_heads_in_hypergraph, type_of_attention=args.type_of_attention_in_hypergraph, embedding_used=args.embedding_used, max_num_of_nodes=max_num_of_nodes, number_of_layers=args.num_of_layers_in_hypergraph).to(device)
     
     if args.optimizer == "adam":
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
+    elif args.optimizer == "adamw":
+        optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=1e-5)
     else:
         raise NotImplementedError(f"Not implemented optimizer: {args.optimizer}")
-
+    
+    if args.regression_or_classification == "regression":
+        assert args.criterion == 'mse', f"Criterion {args.criterion} is not compatible with regression task."
+    elif args.regression_or_classification == "classification":
+        assert args.criterion =='cross_entropy', f"Criterion {args.criterion} is not compatible with classification task."
+    
     if args.criterion == 'mse':
         criterion = MSELoss()
+    elif args.criterion == 'cross_entropy':
+        criterion = CrossEntropyLoss()
     else:
         raise NotImplementedError(f"Not implemented criterion: {args.criterion}")
 
@@ -127,13 +141,22 @@ def main():
 
     test_predictions, test_targets = create_test_predictions_and_targets(model, test_loader, device)
     test_loss = compute_test_loss(test_predictions, test_targets, criterion)
-    test_accuracy = compute_test_accuracy_from_mape(test_predictions, test_targets)
-    test_r2_score = compute_test_r2_score(test_predictions, test_targets)
-    print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f} | Test R2 Score: {test_r2_score:.5f}")
-    plot_predictions_vs_targets(test_predictions, test_targets, args.figure_save_path, wandb_enabled=args.wandb)
+    if args.regression_or_classification == "regression":
+        test_accuracy = compute_test_accuracy_from_mape(test_predictions, test_targets)
+        test_r2_score = compute_test_r2_score(test_predictions, test_targets)
+        print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f} | Test R2 Score: {test_r2_score:.5f}")
+        plot_predictions_vs_targets(test_predictions, test_targets, args.figure_save_path, wandb_enabled=args.wandb)
 
-    if args.wandb:
-        wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy, "Test R2 Score": test_r2_score})
+        if args.wandb:
+            wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy, "Test R2 Score": test_r2_score})
+    elif args.regression_or_classification == "classification":
+        predicted_classes = torch.argmax(test_predictions, dim=1)
+        test_accuracy = compute_test_accuracy_for_classification(predicted_classes, test_targets)
+        test_f1_score = f1_score(predicted_classes, test_targets, average='weighted')
+        plot_confusion_matrix(predicted_classes, test_targets, args.figure_save_path, wandb_enabled=args.wandb)
+        print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f} | Test F1 Score: {test_f1_score:.5f}")
+        if args.wandb:
+            wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy, "Test F1 Score": test_f1_score})
 
 if __name__ == "__main__":
     main()
