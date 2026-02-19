@@ -26,7 +26,7 @@ class HyperGNN(torch.nn.Module):
         else:
             first_hidden_dims = hidden_dims
         
-        if number_of_layers == 1:
+        if number_of_layers >= 1:
             self.graph_conv1 = HypergraphConv(input_dims, first_hidden_dims, use_attention=use_attention, heads=number_of_attention_heads, attention_mode=type_of_attention)
         if number_of_layers >= 2:
             self.graph_conv2 = HypergraphConv(hidden_dims, hidden_dims)

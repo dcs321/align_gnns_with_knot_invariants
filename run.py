@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--validation_split_ratio', type=float, default=0.1, required=False, help='Validation split ratio')
     parser.add_argument('--batch_size', type=int, default=64, required=False, help='Batch size')
     parser.add_argument('--learning_rate', type=float, default=0.001, required=False, help='Learning rate')
-    parser.add_argument('--number_of_epochs', type=int, default=250, required=False, help='Number of epochs')
+    parser.add_argument('--number_of_epochs', type=int, default=500, required=False, help='Number of epochs')
     parser.add_argument('--early_stopping_patience', type=int, default=10, required=False, help='Early stopping patience')
     parser.add_argument('--model_save_path', type=str,default="models/model.pth", required=False, help='Model save path')
     parser.add_argument('--figure_save_path', type=str, default="figures/plot.png", required=False, help='Figure save path')
@@ -46,11 +46,14 @@ def main():
     parser.add_argument('--regression_or_classification', type=str, default="regression", required=False, help='Regression or classification task')
     parser.add_argument('--uniform_edge_features', action='store_true', required=False, help='Use uniform edge features.')
     parser.add_argument('--num_of_layers_in_hypergraph', type=int, default=2, required=False, help='Number of layers in HyperGNN')
+    parser.add_argument('--number_of_period_in_circular', type=int, default=None, required=False, help='Number of period in circular node embedding')
+    parser.add_argument('--number_of_period_in_complex_circular', type=int, default=None, required=False, help='Number of period in complex circular node embedding')
 
     args = parser.parse_args()
 
     if args.wandb:
-        wandb.init(name=args.run_name, config=vars(args))
+        wandb.init(name=args.run_name, config=vars(args), save_code=True)
+        wandb.run.log_code(".")
  
     torch.manual_seed(args.random_seed)
     np.random.seed(args.random_seed)
@@ -78,9 +81,11 @@ def main():
         notations = parse_list_of_features(list(df["PD Notation"]), parse_pd_notation)
     else:
         raise NotImplementedError(f"Not implemented notation: {args.notation}")
+
+    assert args.number_of_period_in_circular > 0 and args.number_of_period_in_complex_circular > 0, "Number of period in circular and complex circular node embedding should be positive."
     
     if args.data_type == "hyper_graph":
-        dataset, max_num_of_nodes = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type, embedding_used=args.embedding_used, use_uniform_edge_features=args.uniform_edge_features, classification_or_regression=args.regression_or_classification)
+        dataset, max_num_of_nodes = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type, embedding_used=args.embedding_used, use_uniform_edge_features=args.uniform_edge_features, classification_or_regression=args.regression_or_classification, number_of_period_in_circular=args.number_of_period_in_circular, number_of_period_in_complex_circular=args.number_of_period_in_complex_circular)
         input_dims = dataset[0].x.shape[1]
     
     random.shuffle(dataset)

@@ -3,21 +3,21 @@ from torch_geometric.data import Data
 import numpy as np
 from torch_geometric.transforms import AddLaplacianEigenvectorPE
 
-def create_hypergraph_dataset_from_pd(pd_notations, labels, node_feature_type="ones", embedding_used=False, use_uniform_edge_features=False, classification_or_regression="regression"):
+def create_hypergraph_dataset_from_pd(pd_notations, labels, node_feature_type="ones", embedding_used=False, use_uniform_edge_features=False, classification_or_regression="regression", number_of_period_in_circular=None, number_of_period_in_complex_circular=None):
     dataset = []
     max_num_of_nodes = 0
     for pd_notation, label in zip(pd_notations, labels):
-        hypergraph_data, num_nodes = hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression)
+        hypergraph_data, num_nodes = hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_period_in_circular, number_of_period_in_complex_circular)
         if num_nodes > max_num_of_nodes:
             max_num_of_nodes = num_nodes
         dataset.append(hypergraph_data)
     return dataset, max_num_of_nodes
 
-def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression="regression"):
+def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_period_in_circular, number_of_period_in_complex_circular):
     num_nodes = np.array(pd_notation).max()
     
     if embedding_used:
-        assert node_feature_type == "zeros" or node_feature_type == "numbers" or node_feature_type == "random_numbers" or node_feature_type == "numbers_with_random_circular_shift" or node_feature_type == "degree", "Now only zero, numbers, random_numbers, numbers_with_random_circular_shift, or degree node labels are supported."
+        assert node_feature_type == "zeros" or node_feature_type == "numbers" or node_feature_type == "random_numbers" or node_feature_type == "numbers_with_random_circular_shift" or node_feature_type == "degree" or node_feature_type == "circular", "Now only zero, numbers, random_numbers, numbers_with_random_circular_shift, degree or circular node labels are supported."
     
 
     hypergraph_edges = [[],[]]
@@ -75,6 +75,20 @@ def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embeddin
             edge_begin = normal_edge_indices[0, i]
             degree[edge_begin] += normal_edge_weights[i]
         node_features = degree.reshape(-1,1)
+    elif node_feature_type == "complex_circular":
+        if number_of_period_in_complex_circular is None:
+            theta = 2 * torch.pi * torch.arange(0, num_nodes, dtype=torch.float) / num_nodes
+        else:
+            theta = 2 * torch.pi * torch.arange(0, num_nodes, dtype=torch.float) / number_of_period_in_complex_circular
+        cos_features = torch.cos(theta).reshape(-1,1)
+        sin_features = torch.sin(theta).reshape(-1,1)
+        node_features = torch.cat([cos_features, sin_features], dim=1)
+    elif node_feature_type == "circular":
+        if number_of_period_in_circular is None:
+            circular_features = torch.arange(0, num_nodes, dtype=torch.long)
+        else:
+            circular_features = torch.arange(0, num_nodes, dtype=torch.long) % number_of_period_in_circular
+        node_features = circular_features.reshape(-1,1).to(torch.float)
     else:
         raise NotImplementedError(f"Not implemented node feature type: {node_feature_type}")
 
