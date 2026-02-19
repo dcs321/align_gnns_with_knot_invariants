@@ -3,17 +3,17 @@ from torch_geometric.data import Data
 import numpy as np
 from torch_geometric.transforms import AddLaplacianEigenvectorPE
 
-def create_hypergraph_dataset_from_pd(pd_notations, labels, node_feature_type="ones", embedding_used=False, use_uniform_edge_features=False, classification_or_regression="regression", number_of_period_in_circular=None, number_of_period_in_complex_circular=None):
+def create_hypergraph_dataset_from_pd(pd_notations, labels, node_feature_type="ones", embedding_used=False, use_uniform_edge_features=False, classification_or_regression="regression",number_of_laplacians=25, laplacian_from_local_to_global=False, number_of_period_in_circular=None, number_of_period_in_complex_circular=None):
     dataset = []
     max_num_of_nodes = 0
     for pd_notation, label in zip(pd_notations, labels):
-        hypergraph_data, num_nodes = hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_period_in_circular, number_of_period_in_complex_circular)
+        hypergraph_data, num_nodes = hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_laplacians, laplacian_from_local_to_global, number_of_period_in_circular, number_of_period_in_complex_circular)
         if num_nodes > max_num_of_nodes:
             max_num_of_nodes = num_nodes
         dataset.append(hypergraph_data)
     return dataset, max_num_of_nodes
 
-def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_period_in_circular, number_of_period_in_complex_circular):
+def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_laplacians, laplacian_from_local_to_global, number_of_period_in_circular, number_of_period_in_complex_circular):
     num_nodes = np.array(pd_notation).max()
     
     if embedding_used:
@@ -64,10 +64,12 @@ def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embeddin
     elif node_feature_type == "laplacian":
         normal_edge_indices, normal_edge_weights = hypergraph_to_graph(hypergraph_edges)
         data_normal_graph = Data(edge_index=normal_edge_indices, edge_weight=normal_edge_weights, num_nodes=num_nodes)
-        graph_laplacian_transformation = AddLaplacianEigenvectorPE(k=min(16, num_nodes-1), attr_name='x', is_undirected=True)
+        graph_laplacian_transformation = AddLaplacianEigenvectorPE(k=min(number_of_laplacians, num_nodes-1), attr_name='x', is_undirected=True)
         node_features = graph_laplacian_transformation(data_normal_graph).x
-        if node_features.shape[1] < 16:
-            node_features = torch.cat([node_features, torch.zeros((num_nodes, 16 - node_features.shape[1]), dtype=torch.float)], dim=1)
+        if laplacian_from_local_to_global:
+            node_features = node_features.flip(dims=[1])
+        if node_features.shape[1] < number_of_laplacians:
+            node_features = torch.cat([node_features, torch.zeros((num_nodes, number_of_laplacians - node_features.shape[1]), dtype=torch.float)], dim=1)
     elif node_feature_type == "degree":
         normal_edge_indices, normal_edge_weights = hypergraph_to_graph(hypergraph_edges)
         degree = torch.zeros(num_nodes, dtype=torch.float)

@@ -48,6 +48,8 @@ def main():
     parser.add_argument('--num_of_layers_in_hypergraph', type=int, default=2, required=False, help='Number of layers in HyperGNN')
     parser.add_argument('--number_of_period_in_circular', type=int, default=None, required=False, help='Number of period in circular node embedding')
     parser.add_argument('--number_of_period_in_complex_circular', type=int, default=None, required=False, help='Number of period in complex circular node embedding')
+    parser.add_argument('--number_of_laplacians', type=int, default=25, required=False, help='Number of laplacian eigenvectors to use for node features when node_feature_type is laplacian')
+    parser.add_argument('--laplacian_from_local_to_global', action='store_true', default=False, help='Go from local (big) to global (small) eigenvalues when node_feature_type is laplacian')
 
     args = parser.parse_args()
 
@@ -82,7 +84,7 @@ def main():
     else:
         raise NotImplementedError(f"Not implemented notation: {args.notation}")
 
-    assert args.number_of_period_in_circular > 0 and args.number_of_period_in_complex_circular > 0, "Number of period in circular and complex circular node embedding should be positive."
+    assert (args.number_of_period_in_circular is None or args.number_of_period_in_circular > 0) and (args.number_of_period_in_complex_circular is None or args.number_of_period_in_complex_circular > 0), "Number of period in circular and complex circular node embedding should be positive."
     
     if args.data_type == "hyper_graph":
         dataset, max_num_of_nodes = create_hypergraph_dataset_from_pd(notations, y, node_feature_type=args.node_feature_type, embedding_used=args.embedding_used, use_uniform_edge_features=args.uniform_edge_features, classification_or_regression=args.regression_or_classification, number_of_period_in_circular=args.number_of_period_in_circular, number_of_period_in_complex_circular=args.number_of_period_in_complex_circular)
@@ -105,6 +107,7 @@ def main():
         raise NotImplementedError(f"Not implemented data loader: {args.data_loader}")
     
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
     model = HyperGNN(input_dims=input_dims, hidden_dims=args.hidden_dims, output_dims=output_dims, use_attention=args.use_attention_in_hypergraph, number_of_attention_heads=args.number_of_attention_heads_in_hypergraph, type_of_attention=args.type_of_attention_in_hypergraph, embedding_used=args.embedding_used, max_num_of_nodes=max_num_of_nodes, number_of_layers=args.num_of_layers_in_hypergraph).to(device)
     
     if args.optimizer == "adam":
