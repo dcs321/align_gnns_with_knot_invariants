@@ -216,3 +216,4 @@ logs/
 data/knot_data.csv
 data/knot_data2.csv
 data/knot_data3*
+slurm*
