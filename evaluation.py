@@ -5,15 +5,21 @@ import wandb
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 
-def create_test_predictions_and_targets(model, test_loader, device):
+def create_test_predictions_and_targets(model, test_loader, data_type, device):
     model.eval()
     test_predictions = []
     test_targets = []
     with torch.no_grad():
         for batch in test_loader:
-            batch = batch.to(device)
-            output = model(batch)
-            test_targets.append(batch.y.cpu())
+            if data_type == "hyper_graph":
+                batch = batch.to(device)
+                output = model(batch)
+                test_targets.append(batch.y.cpu())
+            elif data_type == "pd_notation":
+                batch_x, batch_y = batch[0].to(device), batch[1].to(device)
+                batch_y = batch_y.squeeze(dim=-1)
+                output = model(batch_x)
+                test_targets.append(batch_y.cpu())
             test_predictions.append(output.cpu())
     test_targets = torch.cat(test_targets, dim=0)
     test_predictions = torch.cat(test_predictions, dim=0)

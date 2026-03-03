@@ -76,3 +76,35 @@ class HyperGNN(torch.nn.Module):
         x = torch.cat([x_mean, x_max, x_sum], dim=1)
 
         return self.linear(x)
+
+
+
+class FFNN(torch.nn.Module):
+    def __init__(self, hidden_dims, output_dims, embedding_dims, max_num_of_nodes, max_seq_length, embedding_used=False,):
+        super().__init__()
+        self.embedding_used = embedding_used
+        if  self.embedding_used:
+            self.embedding = Embedding(max_num_of_nodes+1, embedding_dims, padding_idx=max_num_of_nodes)
+        else:
+            embedding_dims = 1
+
+        self.linear1 = Linear(max_seq_length * embedding_dims, hidden_dims)
+        self.linear2 = Linear(hidden_dims, hidden_dims)
+        self.linear3 = Linear(hidden_dims, hidden_dims)
+        self.out = Linear(hidden_dims, output_dims)
+        self.relu = ReLU()
+
+    def forward(self, x):
+        if self.embedding_used:
+            x = self.embedding(x) 
+        x = x.view(x.shape[0], -1)
+
+        x = self.linear1(x)
+        x = self.relu(x)
+        x = self.linear2(x)
+        x = self.relu(x)
+        x = self.linear3(x)
+        x = self.relu(x)
+        x = self.out(x)
+
+        return x

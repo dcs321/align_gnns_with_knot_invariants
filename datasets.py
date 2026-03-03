@@ -1,21 +1,23 @@
 import torch
 from torch_geometric.data import Data
+from torch.utils.data import Dataset
 import numpy as np
 from torch_geometric.transforms import AddLaplacianEigenvectorPE
+import random
 
-def create_hypergraph_dataset_from_pd(pd_notations, labels, node_feature_type="ones", embedding_used=False, use_uniform_edge_features=False, classification_or_regression="regression",number_of_laplacians=25, laplacian_from_local_to_global=False, number_of_period_in_circular=None, number_of_period_in_complex_circular=None):
+def create_hypergraph_dataset_from_pd(pd_notations, labels, node_feature_type="ones", embedding_used=False, use_uniform_edge_features=False, classification_or_regression="regression",number_of_laplacians=25, laplacian_from_local_to_global=False, number_of_period_in_circular=None, number_of_period_in_complex_circular=None, connectivity="orig"):
     dataset = []
     max_num_of_nodes = 0
     for pd_notation, label in zip(pd_notations, labels):
-        hypergraph_data, num_nodes = hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_laplacians, laplacian_from_local_to_global, number_of_period_in_circular, number_of_period_in_complex_circular)
+        hypergraph_data, num_nodes = hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_laplacians, laplacian_from_local_to_global, number_of_period_in_circular, number_of_period_in_complex_circular, connectivity)
         if num_nodes > max_num_of_nodes:
             max_num_of_nodes = num_nodes
         dataset.append(hypergraph_data)
     return dataset, max_num_of_nodes
 
-def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_laplacians, laplacian_from_local_to_global, number_of_period_in_circular, number_of_period_in_complex_circular):
+def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embedding_used, use_uniform_edge_features, classification_or_regression, number_of_laplacians, laplacian_from_local_to_global, number_of_period_in_circular, number_of_period_in_complex_circular, connectivity):
     num_nodes = np.array(pd_notation).max()
-    
+    num_of_hyperedges = 2*len(pd_notation)
     if embedding_used:
         assert node_feature_type == "zeros" or node_feature_type == "numbers" or node_feature_type == "random_numbers" or node_feature_type == "numbers_with_random_circular_shift" or node_feature_type == "degree" or node_feature_type == "circular", "Now only zero, numbers, random_numbers, numbers_with_random_circular_shift, degree or circular node labels are supported."
     
@@ -23,22 +25,48 @@ def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embeddin
     hypergraph_edges = [[],[]]
     edge_features = []
 
-    for c_idx, crossing in enumerate(pd_notation):
-
-        for e_idx, edge_idx in enumerate(crossing):
-            hypergraph_edges[0].append(edge_idx-1)
-            hypergraph_edges[1].append(2*c_idx)
-            if e_idx % 2 == 1:
+    if connectivity == "orig":
+        for c_idx, crossing in enumerate(pd_notation):
+            for e_idx, edge_idx in enumerate(crossing):
                 hypergraph_edges[0].append(edge_idx-1)
-                hypergraph_edges[1].append(2*c_idx+1)
-        if not use_uniform_edge_features:
-            edge_features.append([0]) #crossing
-            edge_features.append([1]) #over
-        else:
-            edge_features.append([0]) 
+                hypergraph_edges[1].append(2*c_idx)
+                if e_idx % 2 == 1:
+                    hypergraph_edges[0].append(edge_idx-1)
+                    hypergraph_edges[1].append(2*c_idx+1)
+            if not use_uniform_edge_features:
+                edge_features.append([0]) #crossing
+                edge_features.append([1]) #over
+            else:
+                edge_features.append([0]) 
+                edge_features.append([0])
+    elif connectivity == "identity":
+        for i in range(num_nodes):
+            hypergraph_edges[0].append(i)
+            hypergraph_edges[1].append(i)
             edge_features.append([0])
+    elif connectivity == "full":
+        for i in range(num_nodes):
+            hypergraph_edges[0].append(i)
+            hypergraph_edges[1].append(0)
+        edge_features.append([0])
+    elif connectivity == "random":
+        num_of_nodes_in_hyperedge = [2]*(num_of_hyperedges//2) + [4]*(num_of_hyperedges//2)
+        random.shuffle(num_of_nodes_in_hyperedge)
+        for i in range(num_of_hyperedges):
+            sampled_nodes = random.sample(range(num_nodes), num_of_nodes_in_hyperedge[i])
+            for j in sampled_nodes:
+                hypergraph_edges[0].append(j)
+                hypergraph_edges[1].append(i)
+            if (not use_uniform_edge_features) and num_of_nodes_in_hyperedge[i] == 2:
+                edge_features.append([1])
+            else:
+                edge_features.append([0])
+            
+            
+
     
     hypergraph_edges = torch.tensor(hypergraph_edges, dtype=torch.long)
+
     if classification_or_regression == "regression":
         y = torch.tensor(label, dtype=torch.float)
     elif classification_or_regression == "classification":
@@ -135,3 +163,29 @@ def hypergraph_to_graph(hypergraph_edges):
     edge_weights = torch.tensor(edge_weights, dtype=torch.float)
 
     return edge_indices, edge_weights
+
+def create_flattened_dataset_from_pd_notation(pd_notations, labels, embedding_used, classification_or_regression):
+    dataset_x = []
+    max_num_of_nodes = 0
+    for pd_notation in pd_notations:
+        flattened_list = [x for pd_component in pd_notation for x in pd_component]
+        num_nodes = np.array(flattened_list).max()
+        if num_nodes > max_num_of_nodes:
+            max_num_of_nodes = num_nodes
+        dataset_x.append(flattened_list)
+    
+    for i in range(len(dataset_x)):
+        dataset_x[i] = dataset_x[i] + [max_num_of_nodes]*(4*max_num_of_nodes-len(dataset_x[i]))
+        if embedding_used:
+            dataset_x[i] = torch.tensor(dataset_x[i],dtype=torch.long)
+        else:
+            dataset_x[i] = torch.tensor(dataset_x[i],dtype=torch.float)
+    for i in range(len(labels)):
+        if classification_or_regression == "regression":
+            labels[i] = torch.tensor(labels[i], dtype=torch.float)
+        elif classification_or_regression == "classification":
+            labels[i] = torch.tensor(labels[i], dtype=torch.long)
+    
+    dataset = list(zip(dataset_x,labels))
+
+    return dataset, max_num_of_nodes
