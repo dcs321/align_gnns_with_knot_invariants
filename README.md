@@ -92,6 +92,9 @@ python run.py --wandb --embedding_used --target_invariant three_colorability --r
 ## References
 
 [1] Cha, J. C., & Livingston, C. (2011, May). Knotinfo: Table of knot invariants.
+
 [2] Lindsay, A., & Ruehle, F. (2025). On the Learnability of Knot Invariants: Representation, Predictability, and Neural Similarity. *arXiv preprint arXiv:2502.12243*.
+
 [3] Ayday, N., Sabanayagam, M., & Ghoshdastidar, D. (2025). Why does your graph neural network fail on some graphs? Insights from exact generalisation error. *arXiv preprint arXiv:2509.10337*.
+
 [4] Bai, S., Zhang, F., & Torr, P. H. (2021). Hypergraph convolution and hypergraph attention. Pattern Recognition, 110, 107637.
