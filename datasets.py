@@ -19,7 +19,7 @@ def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embeddin
     num_nodes = np.array(pd_notation).max()
     num_of_hyperedges = 2*len(pd_notation)
     if embedding_used:
-        assert node_feature_type == "zeros" or node_feature_type == "numbers" or node_feature_type == "random_numbers" or node_feature_type == "numbers_with_random_circular_shift" or node_feature_type == "degree" or node_feature_type == "circular", "Now only zero, numbers, random_numbers, numbers_with_random_circular_shift, degree or circular node labels are supported."
+        assert node_feature_type == "zeros" or node_feature_type == "numbers" or node_feature_type == "random_numbers" or node_feature_type == "numbers_with_random_circular_shift" or node_feature_type == "degree" or node_feature_type == "circular" or node_feature_type == "numbers_with_random_reverse", "Now only zero, numbers, random_numbers, numbers_with_random_circular_shift, degree, numbers_with_random_reverse or circular node labels are supported."
     
 
     hypergraph_edges = [[],[]]
@@ -82,6 +82,11 @@ def hypergraph_datapoint_from_pd(pd_notation, label, node_feature_type, embeddin
         node_features = torch.randn((num_nodes, 16), dtype=torch.float)
     elif node_feature_type == "numbers":
         node_features = torch.arange(0, num_nodes, dtype=torch.float).reshape(-1,1)
+    elif node_feature_type == "numbers_with_random_reverse":
+        node_features = torch.arange(0, num_nodes, dtype=torch.long)
+        if torch.rand(1).item() < 0.5:
+            node_features = torch.flip(node_features,dims=(0,))
+        node_features = node_features.to(torch.float).reshape(-1,1)
     elif node_feature_type == "numbers_with_random_circular_shift":
         node_features = torch.arange(0, num_nodes, dtype=torch.long)
         shift = torch.randint(0, num_nodes, (1,)).item()

@@ -98,7 +98,6 @@ def parse_jones_real_and_imaginary_at_complex(jones_str):
     
     imag_part = im(result_complex).evalf()
     real_part = re(result_complex).evalf()
-    print(f"Parsed Jones polynomial: {polynomial}, Evaluated at t=exp(i*pi/3): {result_complex}, Real part: {real_part}, Imaginary part: {imag_part}")
     return [int(real_part), int(imag_part)]
 
 def parse_pd_notation(pd_str):

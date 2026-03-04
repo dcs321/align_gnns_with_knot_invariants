@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--model_save_path', type=str,default="models/model.pth", required=False, help='Model save path')
     parser.add_argument('--figure_save_path', type=str, default="figures/plot.png", required=False, help='Figure save path')
     parser.add_argument('--hidden_dims', type=int, default=64, required=False, help='Hidden dimensions')
-    parser.add_argument('--embedding_dims', type=int, default=16, required=False, help='Embedding dimensions')
+    parser.add_argument('--embedding_dims', type=int, default=64, required=False, help='Embedding dimensions')
     parser.add_argument('--device', type=str, default='cpu', required=False, help='Device (cpu or cuda)')
     parser.add_argument('--criterion', type=str, default='mse', required=False, help='Criterion')
     parser.add_argument('--optimizer', type=str, default='adam', required=False, help='Optimizer')
@@ -189,6 +189,7 @@ def main():
             print("Weighted misaligment score: ", weighted_misaligment_score)
             if args.wandb:
                  wandb.log({"Misaligment score": misaligment_score,"Weighted misaligment score": weighted_misaligment_score})
+        return
 
     
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')

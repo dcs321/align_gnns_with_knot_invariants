@@ -74,9 +74,6 @@ def compute_regression_misaligment_score(outputs, targets):
 
     misaligment_score = torch.sum(difference ** 2) / variance
 
-    print("Missaligment Score before clamp")
-    print(misaligment_score)
-
     return torch.clamp(misaligment_score, min=0.0, max=1.0).item()
 
 def compute_classification_misaligment_score(labels, outputs, targets):
