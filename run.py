@@ -188,7 +188,7 @@ def main():
             print("Misaligment score: ", misaligment_score)
             print("Weighted misaligment score: ", weighted_misaligment_score)
             if args.wandb:
-                 wandb.log({"Misaligment score": misaligment_score,"Weighted misaligment score": weighted_misaligment_score})
+                 wandb.log({"Misaligment score": weighted_misaligment_score, "Unweighted misaligment score": misaligment_score,})
         return
 
     
@@ -259,9 +259,9 @@ def main():
         test_f1_score_unweighted = f1_score(test_targets, predicted_classes, average='macro')
         test_f1_score = f1_score(test_targets, predicted_classes, average='weighted')
         plot_confusion_matrix(predicted_classes, test_targets, args.figure_save_path, wandb_enabled=args.wandb)
-        print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f} | Test F1 Score: {test_f1_score:.5f} | Test F1 Score Unweighted: {test_f1_score_unweighted:.5f}")
+        print(f"Test Loss: {test_loss:.5f} | Test Accuracy: {test_accuracy:.5f} | Test F1 Score: {test_f1_score:.5f} | Test F1 Score Macro-weighted: {test_f1_score_unweighted:.5f}")
         if args.wandb:
-            wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy, "Test F1 Score": test_f1_score, "Test F1 Score Unweighted": test_f1_score_unweighted})
+            wandb.log({"Test Loss": test_loss, "Test Accuracy": test_accuracy, "Test F1 Score": test_f1_score, "Test F1 Score Macro-weighted": test_f1_score_unweighted})
 
 if __name__ == "__main__":
     main()
