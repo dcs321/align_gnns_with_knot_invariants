@@ -64,13 +64,11 @@ def compute_misaligment_score(dataset, max_num_of_nodes, node_feature_type, regr
     
 
 def compute_regression_misaligment_score(outputs, targets):
-
-    targets_centered = targets - targets.mean(dim=0,keepdim=True)
-    variance = torch.sum(targets_centered ** 2)
+    variance = torch.sum(targets ** 2)
     
-    w = torch.linalg.lstsq(outputs, targets_centered, rcond=None).solution
+    w = torch.linalg.lstsq(outputs, targets, rcond=None).solution
 
-    difference = targets_centered - outputs @ w
+    difference = targets - outputs @ w
 
     misaligment_score = torch.sum(difference ** 2) / variance
 
