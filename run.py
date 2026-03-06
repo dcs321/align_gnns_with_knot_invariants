@@ -185,8 +185,8 @@ def main():
                  wandb.log({"Misaligment score": misaligment_score})
         elif args.regression_or_classification == "classification":
             misaligment_score, weighted_misaligment_score  = compute_misaligment_score(dataset, max_num_of_nodes, args.node_feature_type, args.regression_or_classification)
-            print("Misaligment score: ", misaligment_score)
-            print("Weighted misaligment score: ", weighted_misaligment_score)
+            print("Misaligment score: ", weighted_misaligment_score)
+            print("Unweighted misaligment score: ", misaligment_score)
             if args.wandb:
                  wandb.log({"Misaligment score": weighted_misaligment_score, "Unweighted misaligment score": misaligment_score,})
         return

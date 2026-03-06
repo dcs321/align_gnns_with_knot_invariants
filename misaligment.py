@@ -56,21 +56,24 @@ def compute_misaligment_score(dataset, max_num_of_nodes, node_feature_type, regr
     labels = torch.tensor(labels)
 
     if regression_or_classification == "regression":
-        normalized_misaligment_score = compute_regression_misaligment_score(outputs,targets)
+        normalized_misaligment_score = compute_regression_misaligment_score(outputs,targets,centered=True)
         return normalized_misaligment_score
     elif regression_or_classification == "classification":
         normalized_misaligment_score, normalized_misaligment_score_weighted = compute_classification_misaligment_score(labels,outputs,targets)
         return normalized_misaligment_score, normalized_misaligment_score_weighted
     
 
-def compute_regression_misaligment_score(outputs, targets):
-    variance = torch.sum(targets ** 2)
+def compute_regression_misaligment_score(outputs, targets, centered=False):
+    if centered:
+        targets = targets - targets.mean(dim=0,keepdim=True)
+    
+    squared_sum = torch.sum(targets ** 2)
     
     w = torch.linalg.lstsq(outputs, targets, rcond=None).solution
 
     difference = targets - outputs @ w
 
-    misaligment_score = torch.sum(difference ** 2) / variance
+    misaligment_score = torch.sum(difference ** 2) / squared_sum
 
     return torch.clamp(misaligment_score, min=0.0, max=1.0).item()
 
