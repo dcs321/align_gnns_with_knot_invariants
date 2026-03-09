@@ -1,3 +1,14 @@
+# Newest Version
+The classification misalignment scores have been updated compared to the paper, as they were previously computed using mean-centered labels. The main conclusions remain unchanged.
+
+Details of the misalignment score [3] computation for graph-level tasks can be found below:
+
+![Misalignment Score for Graph-level Prediction Tasks.](assets/misalignment_computation.png)
+
+The updated classification misalignment scores can be found in the table below:
+
+![Updated Misalignment Scores for Classification.](assets/misalignment_table.png)
+
 # Alignment of GNNs with Knot Invariants
 
 This is the repository for the "L65: Geometric Deep Learning" mini-project on "Alignment of GNNs with Knot Invariants". We use the KnotInfo dataset [1] for knot structures and invariants.
